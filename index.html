@@ -1,13 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Three.js Starter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Förderband</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='6' width='26' height='22' rx='3' fill='%23c99a6b'/%3E%3Crect x='13' y='6' width='6' height='22' fill='%23d7263d'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <canvas id="scene"></canvas>
+    <canvas id="scene" aria-label="Förderband mit Paketen, die sich per Drag and Drop in einen Lieferwagen einräumen lassen"></canvas>
+    <p class="counter" id="counter" aria-live="polite">Zugestellt: <strong>0</strong> <span>Pakete</span></p>
+    <p class="hint" id="hint">Pakete in den Lieferwagen schlichten</p>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

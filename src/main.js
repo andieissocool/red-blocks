@@ -1,69 +1,99 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { DOOR_DISTANCE, PALETTE } from './config.js';
+import { createEnvironment } from './scene/environment.js';
+import { createBeltPath } from './conveyor/path.js';
+import { createBelt } from './conveyor/belt.js';
+import { createHouse } from './conveyor/house.js';
+import { PackageManager } from './packages/packageManager.js';
+import { DragController } from './interaction/drag.js';
 
 const canvas = document.querySelector('#scene');
+const hint = document.querySelector('#hint');
+const counter = document.querySelector('#counter');
+
+function showDelivered(count) {
+  counter.querySelector('strong').textContent = count;
+  counter.querySelector('span').textContent = count === 1 ? 'Paket' : 'Pakete';
+  // Kurz aufpoppen lassen: Klasse entfernen, Reflow erzwingen, wieder setzen.
+  counter.classList.remove('bump');
+  void counter.offsetWidth;
+  counter.classList.add('bump');
+}
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
-// Scene & camera
+// Szene
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0e0f13);
+const { obstacles } = createEnvironment(scene);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(3, 2, 5);
+const path = createBeltPath();
+const doors = { start: DOOR_DISTANCE, end: path.length - DOOR_DISTANCE };
 
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
+const belt = createBelt(path, { doors, maxAnisotropy: renderer.capabilities.getMaxAnisotropy() });
+scene.add(belt.group);
 
-// Lights
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+const houses = [
+  createHouse(path, { end: 'start', wallColor: PALETTE.red, roofColor: PALETTE.black }),
+  createHouse(path, { end: 'end', wallColor: PALETTE.black, roofColor: PALETTE.red }),
+];
+for (const house of houses) scene.add(house.group);
 
-const sun = new THREE.DirectionalLight(0xffffff, 2);
-sun.position.set(4, 6, 3);
-sun.castShadow = true;
-scene.add(sun);
-
-// Objects
-const cube = new THREE.Mesh(
-  new THREE.BoxGeometry(1, 1, 1),
-  new THREE.MeshStandardMaterial({ color: 0x4f8cff, roughness: 0.4, metalness: 0.2 })
-);
-cube.position.y = 0.75;
-cube.castShadow = true;
-scene.add(cube);
-
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(10, 10),
-  new THREE.MeshStandardMaterial({ color: 0x22252e })
-);
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-scene.add(new THREE.GridHelper(10, 10, 0x444a58, 0x2c303a));
-
-// Resize
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const packages = new PackageManager({
+  scene,
+  path,
+  doors,
+  obstacles: [...obstacles, ...houses.map((house) => house.footprint)],
+  onDelivered: showDelivered,
 });
+packages.populate();
+
+// Kamera: fest, schräg von oben, mit Band und Straße im Bild
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
+const CAMERA_TARGET = new THREE.Vector3(0, 0.3, 1.5);
+const CAMERA_ELEVATION = THREE.MathUtils.degToRad(50);
+const VIEW_DIRECTION = new THREE.Vector3(0, Math.sin(CAMERA_ELEVATION), Math.cos(CAMERA_ELEVATION));
+
+const staticOccluders = [...belt.occluders, ...houses.flatMap((house) => house.occluders)];
+const drag = new DragController({
+  camera,
+  element: canvas,
+  scene,
+  packages,
+  occluders: () => [...staticOccluders, ...packages.vanOccluders()],
+  onDragStart: () => hint.classList.add('is-hidden'),
+});
+
+// Der Abstand wird so gewählt, dass die ganze Strecke samt Häusern ins Bild passt.
+function resize() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(width, height);
+
+  camera.aspect = width / height;
+  const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
+  const halfWidth = camera.aspect < 1 ? 7.8 : 11.6;
+  const distance = Math.max(halfWidth / (tanHalfFov * camera.aspect), 5.2 / tanHalfFov);
+  camera.position.copy(CAMERA_TARGET).addScaledVector(VIEW_DIRECTION, distance);
+  camera.lookAt(CAMERA_TARGET);
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
 
 // Loop
 const timer = new THREE.Timer();
+timer.connect(document);
 
 renderer.setAnimationLoop((timestamp) => {
   timer.update(timestamp);
-  const delta = timer.getDelta();
+  const dt = Math.min(timer.getDelta(), 1 / 20);
 
-  cube.rotation.x += delta * 0.5;
-  cube.rotation.y += delta * 0.8;
-
-  controls.update();
+  packages.update(dt);
+  drag.update();
+  belt.update(dt);
   renderer.render(scene, camera);
 });
