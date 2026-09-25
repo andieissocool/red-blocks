@@ -50,11 +50,16 @@ const packages = new PackageManager({
 });
 packages.populate();
 
-// Kamera: fest, schräg von oben, mit Band und Straße im Bild
-const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 200);
-const CAMERA_TARGET = new THREE.Vector3(0, 0.3, 1.5);
-const CAMERA_ELEVATION = THREE.MathUtils.degToRad(50);
-const VIEW_DIRECTION = new THREE.Vector3(0, Math.sin(CAMERA_ELEVATION), Math.cos(CAMERA_ELEVATION));
+// Kamera: fest, schräg von oben, mit Band und Straße im Bild. Im Querformat blickt sie von
+// vorne, im Hochformat vom Bandanfang aus: Dann läuft die Strecke von unten nach oben und
+// füllt auch einen schmalen Bildschirm.
+//   side                 – Richtung vom Blickziel zur Kamera in der Ebene: von vorne (+z) oder vom Bandanfang (-x)
+//   halfWidth/halfHeight – was mindestens ins Bild muss, gemessen auf Höhe des Blickziels
+const VIEWS = {
+  landscape: { fov: 32, elevation: 50, side: [0, 1], target: [0, 0.3, 1.5], halfWidth: 11.6, halfHeight: 5.2 },
+  portrait: { fov: 26, elevation: 60, side: [-1, 0], target: [1.0, 0.3, 1.8], halfWidth: 4.4, halfHeight: 9.4 },
+};
+const camera = new THREE.PerspectiveCamera(VIEWS.landscape.fov, 1, 0.1, 200);
 
 const staticOccluders = [...belt.occluders, ...houses.flatMap((house) => house.occluders)];
 const drag = new DragController({
@@ -74,12 +79,18 @@ function resize() {
   renderer.setSize(width, height);
 
   camera.aspect = width / height;
-  const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const halfWidth = camera.aspect < 1 ? 7.8 : 11.6;
-  const distance = Math.max(halfWidth / (tanHalfFov * camera.aspect), 5.2 / tanHalfFov);
-  camera.position.copy(CAMERA_TARGET).addScaledVector(VIEW_DIRECTION, distance);
-  camera.lookAt(CAMERA_TARGET);
+  const portrait = camera.aspect < 1;
+  const { fov, elevation, side, target, halfWidth, halfHeight } = portrait ? VIEWS.portrait : VIEWS.landscape;
+  camera.fov = fov;
+  const tanHalfFov = Math.tan(THREE.MathUtils.degToRad(fov) / 2);
+  const distance = Math.max(halfWidth / (tanHalfFov * camera.aspect), halfHeight / tanHalfFov);
+  const angle = THREE.MathUtils.degToRad(elevation);
+  const flat = Math.cos(angle) * distance;
+  const [x, y, z] = target;
+  camera.position.set(x + side[0] * flat, y + Math.sin(angle) * distance, z + side[1] * flat);
+  camera.lookAt(x, y, z);
   camera.updateProjectionMatrix();
+  packages.setOpenRear(portrait);
 }
 window.addEventListener('resize', resize);
 resize();

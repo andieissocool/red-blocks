@@ -1,12 +1,16 @@
-import { CELL, HOLD, PACKAGE_SIZES } from '../config.js';
+import { CELL, HOLD, PACKAGE_SIZES } from "../config.js";
 
 const HALF_X = (HOLD.cellsX * CELL) / 2;
 const HALF_Z = (HOLD.cellsZ * CELL) / 2;
 const SEARCH_DISTANCE = 1.2; // so weit darf ein Paket vom Zeiger weg einrasten
 const MIN_SUPPORT = 0.5; // Anteil der Grundfläche, der aufliegen muss
+const DEPART_FILL = 0.5; // ab diesem Füllgrad fährt der Wagen ab, auch wenn noch Platz ist
 
 function cellsOf(size) {
-  return { w: Math.round(size.width / CELL), l: Math.round(size.length / CELL) };
+  return {
+    w: Math.round(size.width / CELL),
+    l: Math.round(size.length / CELL),
+  };
 }
 
 // Laderaum im Raster. Koordinaten sind lokal zum Laderaum: Mitte = (0, 0),
@@ -31,15 +35,26 @@ export class CargoHold {
     const tops = new Array(w * l).fill(0);
     for (const item of items) {
       const top = item.rest + item.h;
-      for (let a = Math.max(i, item.i); a < Math.min(i + w, item.i + item.w); a++) {
-        for (let b = Math.max(j, item.j); b < Math.min(j + l, item.j + item.l); b++) {
+      for (
+        let a = Math.max(i, item.i);
+        a < Math.min(i + w, item.i + item.w);
+        a++
+      ) {
+        for (
+          let b = Math.max(j, item.j);
+          b < Math.min(j + l, item.j + item.l);
+          b++
+        ) {
           const k = (a - i) * l + (b - j);
           tops[k] = Math.max(tops[k], top);
         }
       }
     }
     const rest = Math.max(...tops);
-    return { rest, carried: tops.filter((top) => top === rest).length / tops.length };
+    return {
+      rest,
+      carried: tops.filter((top) => top === rest).length / tops.length,
+    };
   }
 
   // Zelle, deren Paketmitte (lx, lz) am nächsten liegt und an der das Paket unter die
@@ -52,7 +67,8 @@ export class CargoHold {
         const x = (i + w / 2) * CELL - HALF_X;
         const z = (j + l / 2) * CELL - HALF_Z;
         const distance = Math.hypot(x - lx, z - lz);
-        if (distance > maxDistance || (best && distance >= best.distance)) continue;
+        if (distance > maxDistance || (best && distance >= best.distance))
+          continue;
         const { rest, carried } = this.support(i, j, w, l);
         if (rest + size.height > HOLD.height || carried < MIN_SUPPORT) continue;
         best = { i, j, w, l, h: size.height, rest, x, z, distance };
@@ -79,5 +95,19 @@ export class CargoHold {
   // Voll, wenn keine der Paketgrößen mehr irgendwo hineinpasst.
   isFull() {
     return PACKAGE_SIZES.every((size) => !this.findSpot(size, 0, 0, Infinity));
+  }
+
+  // Anteil des Laderaums, den die Pakete ausfüllen (0 bis 1).
+  fillLevel() {
+    const used = this.items.reduce(
+      (sum, item) => sum + item.w * item.l * item.h,
+      0,
+    );
+    return used / (HOLD.cellsX * HOLD.cellsZ * HOLD.height);
+  }
+
+  // Ganz voll zu schlichten ist mühsam, deshalb reicht ein gut gefüllter Laderaum.
+  readyToDepart() {
+    return this.fillLevel() >= DEPART_FILL || this.isFull();
   }
 }

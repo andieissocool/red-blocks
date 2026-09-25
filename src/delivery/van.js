@@ -8,7 +8,7 @@ const ENTRY_X = -19;
 const EXIT_X = 19;
 const MAX_SPEED = 7;
 const ACCELERATION = 5;
-const DEPART_DELAY = 1.2; // Sekunden zwischen "voll" und Abfahrt
+const DEPART_DELAY = 1.2; // Sekunden zwischen "abfahrbereit" und Abfahrt
 
 // Aufbau in lokalen Koordinaten: z nach vorne, x quer (+x = von der Kamera weg).
 const FLOOR_Y = 0.55;
@@ -71,6 +71,9 @@ function buildModel() {
   const rimY = FLOOR_Y + WALL_HEIGHT + 0.02;
   const farRim = box(black, [WALL + 0.02, 0.04, CargoHold.halfZ * 2 + WALL * 2 + 0.02], [CargoHold.halfX + WALL / 2, rimY, HOLD_CENTER_Z]);
   const rearRim = box(black, [HALF_X * 2 + 0.02, 0.04, WALL + 0.02], [0, rimY, REAR_Z + WALL / 2]);
+  // Ersetzt die Heckwand, wenn die Kamera von hinten in den Laderaum schaut.
+  const rearSill = box(red, [HALF_X * 2, 0.14, WALL], [0, FLOOR_Y + 0.07, REAR_Z + WALL / 2]);
+  rearSill.visible = false;
 
   // Fahrerhaus
   const cabLower = box(red, [HALF_X * 2, CAB_WAIST_Y - 0.42, CAB_FRONT_Z - CAB_BACK_Z], [0, (CAB_WAIST_Y + 0.42) / 2, (CAB_FRONT_Z + CAB_BACK_Z) / 2]);
@@ -114,18 +117,23 @@ function buildModel() {
   }
 
   group.add(
-    chassis, base, floorPlate, farWall, rearWall, partition, sill, farRim, rearRim,
+    chassis, base, floorPlate, farWall, rearWall, partition, sill, farRim, rearRim, rearSill,
     cabLower, cabin, windshield, sideWindow, grille, ...headlights, ...bumpers, ...wheels,
   );
   group.traverse((object) => {
     if (object.isMesh) object.castShadow = object.receiveShadow = true;
   });
 
-  return { group, wheels, occluders: [base, farWall, rearWall, partition, cabLower, cabin] };
+  return {
+    group,
+    wheels,
+    rear: { wall: rearWall, rim: rearRim, sill: rearSill },
+    occluders: [base, farWall, rearWall, partition, cabLower, cabin],
+  };
 }
 
 // Lieferwagen auf der Straße. Fährt von links vor, parkt, und fährt nach rechts ab,
-// sobald er voll ist. Der Laderaum (`hold`) verwaltet das Raster.
+// sobald er gut gefüllt ist. Der Laderaum (`hold`) verwaltet das Raster.
 export class Van {
   constructor() {
     this.hold = new CargoHold();
@@ -139,9 +147,21 @@ export class Van {
     const model = buildModel();
     this.group = model.group;
     this.wheels = model.wheels;
-    this.occluders = model.occluders;
+    this.rear = model.rear;
+    this.walls = model.occluders;
     this.group.rotation.y = YAW;
     this.group.position.set(this.x, 0, ROAD.z);
+  }
+
+  // Ausgeblendete Wände verdecken nichts, der Raycaster würde sie aber trotzdem treffen.
+  get occluders() {
+    return this.walls.filter((mesh) => mesh.visible);
+  }
+
+  // Schaut die Kamera von hinten in den Laderaum, wird die Heckwand zur niedrigen Kante.
+  setOpenRear(open) {
+    this.rear.wall.visible = this.rear.rim.visible = !open;
+    this.rear.sill.visible = open;
   }
 
   get moving() {

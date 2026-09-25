@@ -14,6 +14,11 @@ Der Three.js-Starter (Würfel, Grid, OrbitControls) entfällt.
   warme Pastellfarben, weiche Schatten, ein paar Bäume, Steine und Büsche als Deko.
 - **Kamera:** fest, schräg von oben. Der Abstand passt sich dem Seitenverhältnis an,
   sodass die ganze Strecke samt Häusern sichtbar ist.
+  - Querformat (Desktop): Blick von vorne, die Strecke läuft von links nach rechts.
+  - Hochformat (Handy, Mobile First): Blick vom Bandanfang aus, steiler (60°) und mit engerem
+    Sichtfeld. Die Strecke läuft von unten nach oben, die Straße liegt rechts, und die Szene füllt
+    den ganzen Bildschirm. Das hintere Haus (mit der sichtbaren Tür) liegt knapp unter dem Zähler,
+    vom vorderen bleibt unten nur das Dach im Bild. Der Hinweis steht im Hochformat unten.
 - **Strecke:** offen, von links nach rechts. Gerade Stücke an beiden Enden, dazwischen eine
   sanfte S-Kurve, bei der Steigung und Krümmung an den Enden auf null auslaufen
   (engster Radius ca. 2, seitlicher Ausschlag ca. ±1,3).

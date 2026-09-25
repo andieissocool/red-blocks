@@ -37,6 +37,12 @@ export class PackageManager {
     this.leavingVans = [];
     this.nextVanIn = 0;
     this.delivered = 0;
+    this.openRear = false; // Heckwand niedrig, weil die Kamera von hinten in die Wagen schaut
+  }
+
+  setOpenRear(open) {
+    this.openRear = open;
+    for (const van of [this.van, ...this.leavingVans]) van?.setOpenRear(open);
   }
 
   // Band vorab füllen und ein paar Pakete daneben legen, damit die Szene nicht leer startet.
@@ -87,6 +93,7 @@ export class PackageManager {
       this.nextVanIn -= dt;
       if (this.nextVanIn <= 0) {
         this.van = new Van();
+        this.van.setOpenRear(this.openRear);
         this.scene.add(this.van.group);
       }
     }
@@ -156,13 +163,13 @@ export class PackageManager {
     pkg.startDrag();
   }
 
-  // Aus dem Laderaum nehmen: Was darüber lag, rutscht nach. Passt danach wieder etwas
-  // hinein, bleibt der Wagen stehen.
+  // Aus dem Laderaum nehmen: Was darüber lag, rutscht nach. Ist der Wagen danach nicht
+  // mehr abfahrbereit, bleibt er stehen.
   unload(pkg) {
     const { van } = pkg;
     van.hold.remove(pkg);
     for (const item of van.hold.items) item.pkg.rest = item.rest;
-    if (!van.hold.isFull()) van.cancelDeparture();
+    if (!van.hold.readyToDepart()) van.cancelDeparture();
   }
 
   drop(pkg) {
@@ -170,7 +177,7 @@ export class PackageManager {
     pkg.place(spot);
     if (spot.state !== 'van') return;
     spot.van.hold.add(pkg, spot.cell);
-    if (spot.van.hold.isFull()) spot.van.scheduleDeparture();
+    if (spot.van.hold.readyToDepart()) spot.van.scheduleDeparture();
   }
 
   // Wohin landet `pkg`, wenn es bei (x, z) losgelassen wird?
